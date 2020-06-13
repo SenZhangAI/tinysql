@@ -71,8 +71,28 @@ func EncodeRowKeyWithHandle(tableID int64, handle int64) kv.Key {
 
 // DecodeRecordKey decodes the key and gets the tableID, handle.
 func DecodeRecordKey(key kv.Key) (tableID int64, handle int64, err error) {
-	/* Your code here */
-	return
+	if len(key) < RecordRowKeyLen {
+		return 0, 0, errInvalidRecordKey.GenWithStack("invalid key length: %v", len(key))
+	}
+	tPrefix := key[0:tablePrefixLength]
+	if !bytes.Equal(tPrefix, tablePrefix) {
+		return 0, 0, errInvalidRecordKey.GenWithStack("invalid table prefix: %v", tPrefix)
+	}
+	tableIdBytes := key[tablePrefixLength : tablePrefixLength+idLen]
+	_, tID, err := codec.DecodeInt(tableIdBytes)
+	if err != nil {
+		return 0, 0, errors.Trace(err)
+	}
+	rPrefix := key[tablePrefixLength+idLen : prefixLen]
+	if !bytes.Equal(rPrefix, recordPrefixSep) {
+		return 0, 0, errInvalidRecordKey.GenWithStack("invalid record prefix: %v", rPrefix)
+	}
+	handleBytes := key[prefixLen:RecordRowKeyLen]
+	_, hdl, err := codec.DecodeInt(handleBytes)
+	if err != nil {
+		return 0, 0, errors.Trace(err)
+	}
+	return tID, hdl, nil
 }
 
 // appendTableIndexPrefix appends table index prefix  "t[tableID]_i".
@@ -94,8 +114,28 @@ func EncodeIndexSeekKey(tableID int64, idxID int64, encodedValue []byte) kv.Key 
 
 // DecodeIndexKeyPrefix decodes the key and gets the tableID, indexID, indexValues.
 func DecodeIndexKeyPrefix(key kv.Key) (tableID int64, indexID int64, indexValues []byte, err error) {
-	/* Your code here */
-	return tableID, indexID, indexValues, nil
+	if len(key) < RecordRowKeyLen {
+		return 0, 0, nil, errInvalidRecordKey.GenWithStack("invalid key length: %v", len(key))
+	}
+	tPrefix := key[0:tablePrefixLength]
+	if !bytes.Equal(tPrefix, tablePrefix) {
+		return 0, 0, nil, errInvalidIndexKey.GenWithStack("invalid table prefix: %v", tPrefix)
+	}
+	tableIdBytes := key[tablePrefixLength : tablePrefixLength+idLen]
+	_, tID, err := codec.DecodeInt(tableIdBytes)
+	if err != nil {
+		return 0, 0, nil, errors.Trace(err)
+	}
+	iPrefix := key[tablePrefixLength+idLen : prefixLen]
+	if !bytes.Equal(iPrefix, indexPrefixSep) {
+		return 0, 0, nil, errInvalidIndexKey.GenWithStack("invalid index prefix: %v", iPrefix)
+	}
+	idxBytes := key[prefixLen:RecordRowKeyLen]
+	_, idxID, err := codec.DecodeInt(idxBytes)
+	if err != nil {
+		return 0, 0, nil, errors.Trace(err)
+	}
+	return tID, idxID, key[RecordRowKeyLen:], nil
 }
 
 // DecodeIndexKey decodes the key and gets the tableID, indexID, indexValues.
